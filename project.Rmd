@@ -1,0 +1,121 @@
+---
+title: "Machine Learning Project"
+author: "R. Dainauski"
+date: "February 13, 2016"
+output: html_document
+---
+
+#Assignment
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. Any of the other variables may be used to predict with. 
+
+### Data Preparation
+
+Being by loading required libraries, loading the intial data, setting the random seed for reproducability,
+and setting the classe column as a factor.
+
+
+```{r}
+setwd("F:/MachineLearning"); library(caret); library(kernlab); 
+library(randomForest); set.seed(123)
+
+workingAddr <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+quizAddr <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+working <- read.csv(url(workingAddr), na.strings=c("NA","#DIV/0!",""), stringsAsFactors=FALSE)
+quiz <- read.csv(url(quizAddr), na.strings=c("NA","#DIV/0!",""), stringsAsFactors=FALSE)
+
+working$classe <- as.factor(working$classe)
+```
+
+Bifurcate the working data into a training set and a testing set. We now have 3 data sets:
+
+Training - for building the model
+
+Testing - for validation and out of sample error check
+
+Quiz - answers unkown, will be predicted by model
+
+
+```{r, echo=FALSE}
+inTrain <- createDataPartition(y=working$classe, p=0.6, list=FALSE)
+
+training <- working[inTrain, ]; testing <- working[-inTrain, ]
+```
+
+Some basic data cleansing.
+
+```{r}
+
+# Remove NZVs
+
+nzvcols <- nearZeroVar(training)
+training <- training[,-nzvcols]
+
+# remove any column with over 500 NA values
+
+training <- training[!colSums(is.na(training)) > 500]
+
+# remove row.nums and other irrelevant data
+
+training <- training[,-c(1:6)]
+
+```
+
+###Modeling
+
+Fit random forest model. A couple notes here:
+
+- I'll sheepishly admit I tried glm first. As I should have known, glm doesn't work for >2 classes. Oops.
+- I then chose random forest which has the reputation of being the strongest model in general.
+- I let it run for 3+ hours then stopped it. I don't know how long it would have run but be aware that it can be a LONG time.
+- I cut it down to 100 trees. It still runs for 10-15 minutes or so.
+- A good way to make sure your model is still 'alive' is to use the do.trace=TRUE. I turned it off here so the massive output won't cluter this document, but when using it you will see the trials rolling by on your screen.
+
+```{r}
+
+modFit <- train(classe ~ ., method="rf", data=training, ntree=100)
+
+```
+
+Take a look at the results.
+
+```{r, echo=TRUE}
+
+modFit
+
+```
+
+Tree 27 was chosen with 98.6% accuracy, kappa of 98.3%. Seems pretty solid.
+
+###Cross Validation
+
+Let's test our model on the data we held out for cross validation.
+
+```{r}
+
+predTesting <- predict(modFit, testing)
+
+confusionMatrix(predTesting, testing$classe)
+
+```
+
+Excellent. Out of sample error rate under 1%.
+
+###Quiz
+
+Let's go ahead and use this model to do the quiz. This is the first dataset where we don't know the correct answers.
+
+```{r}
+
+predQuiz <- predict(modFit, quiz)
+
+predQuiz
+```
+
+Upon entry, quiz answers were all correct. Good model!
+
+
+
